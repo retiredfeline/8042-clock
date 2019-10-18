@@ -20,36 +20,44 @@
 .equ	blinktest,	0
 
 ; 0 = mains frequency input on I pin, 1 = free running, no mains input
-.equ	freerun,	1	; no mains reference
+.equ	intxtal,	1	; MCU clock
 
 ; 0 = driving multiplexed display, 1 = using TM1637 serial display
 .equ	tm1637,		1
 
-; 0 = no brightness control, 1 = both buttons = cycle brightness, TM1637 only
+; 0 = no brightness control, 1 = both buttons = cycle brightness
 .equ	brightcontrol,	1
 
 ; 0 = 0 bit turns on, 1 = 1 bit turns on segment, direct drive only
-.equ	highison,	1	; using 74LS244 non-inverting buffer
+.equ	highison,	1	; using 7406 inverting buffer
 
 ; timing information.
 ; clk / 5 -- ale (osc / 15). "provided continuously" (pin 11)
 ; ale / 32 -- "normal" timer rate (osc / 480).
-; with 12 MHz crystal, period is 40 us
-; with  6 MHz crystal, period is 80 us
-; set (negated) timer count, tick = period x scandiv
+; set timer count, tick = period x timerdiv
 
 .if	debug == 1
-.equ	scandiv,	-3	; speed up simulation
+.if	blinktest == 1
+.else				; but only if not blink program
+.equ	timerdiv,	3	; speed up simulation
+.endif	; blink
 .else
-.equ	scandiv,	-100	; 4 ms (250 Hz) with 12 MHz crystal
+.equ	timerdiv,	100	; 250 Hz with 12.000 MHz crystal
+;.equ	timerdiv,	100	; 200 Hz with 9.600 MHz crystal
+;.equ	timerdiv,	64	; 200 Hz with 6.144 MHz crystal
+;.equ	timerdiv,	50	; 250 Hz with 6.000 MHz crystal
+;.equ	timerdiv,	44	; 240 Hz with 5.0688 MHz crystal
+;.equ	timerdiv,	40	; 256 Hz with 4.9152 MHz crystal
+;.equ	timerdiv,	32	; 240 Hz with 3.6864 MHz crystal
 .endif	; debug
+.equ	tcount,		-timerdiv
 
-.equ	tick,		4	; length in ms determined by scandiv
+.equ	scanfreq,	250	; resulting scan frequency, see above
 
-; these are multiples of the tick
-.equ	depmin,		100/tick	; switch must be down 100 ms to register
-.equ	rptthresh,	500/tick	; repeat kicks in at 500 ms
-.equ	rptperiod,	250/tick	; repeat 4 times / second
+; these are in 1/100ths of second, multiply by scanfreq to get counts
+.equ	depmin,		scanfreq*10/100	; down 1/10th s to register
+.equ	rptthresh,	scanfreq*50/100	; repeat kicks in at 1/2 s
+.equ	rptperiod,	scanfreq*25/100	; repeat 4 times / second
 
 ; number of digits to scan, always 4 for this clock
 ; note: we always store 6 digits of time
@@ -73,9 +81,9 @@
 ; for driving TM1637 based display with 2 lines
 ;
 .equ	data1mask,	0x80	; p2.7
-.equ	data0mask,	~data1mask
+.equ	data0mask,	~data1mask&0xff
 .equ	clk1mask,	0x40	; p2.6
-.equ	clk0mask,	~clk1mask
+.equ	clk0mask,	~clk1mask&0xff
 .equ	colon1mask,	0x80	; colon is top bit
 
 ; 0 = no blink on p2.5, 1 = blink, used for verification when TM1637 used
@@ -84,7 +92,11 @@
 .equ	blink0mask,	~blink1mask
 .equ	minbright,	0x88	; 1/16th brightness
 .equ	maxbright,	0x8f	; 14/16 brightness (why not full?)
-.equ	currbright,	0x27	; storage location
+.equ	defbright,	(maxbright+minbright)/2
+.else
+.equ	minbright,	0x0	; min brightness
+.equ	maxbright,	0x7	; full brightness
+.equ	defbright,	(maxbright+minbright)/2
 .endif	; tm1637
 
 ; scan digit storage (6 digits)
@@ -104,6 +116,7 @@
 
 ; current display digit storage
 .equ	scand,		0x26
+.equ	currbright,	0x27
 
 .if	scancnt == 4
 .equ	scanbase,	sdm1
@@ -116,6 +129,7 @@
 .equ	swmin,		0x2a	; count of how long state has been stable
 .equ	mrepeat,	0x2c	; repeat counter for minutes up
 .equ	hrepeat,	0x2d	; repeat counter for hours up
+.equ	brightthresh,	0x2e	; store point at which display turns off
 
 ; saved PSW for checking previous F0
 .equ	savepsw,	0x2f
@@ -123,30 +137,31 @@
 .equ	clockoff,	0x30	; put clock values at top of RAM
 
 .equ	sr,		0+clockoff
+.equ	sra,		1+clockoff
 .equ	mr,		2+clockoff
+.equ	mra,		3+clockoff
 .equ	hr,		4+clockoff
+.equ	hra,		5+clockoff
 
-; pseudo registers
+.equ	tickcounter,	0x3e
 
-.equ	tickcounter,	14+clockoff
+.if	debug == 1
+.equ	counthz,	2	; speed up simulation
+.else
+.equ	counthz,	50	; "mains" frequency, must suit scanfreq
+.endif	; debug
 
 ; divide tick to get mains frequency
 .if	debug == 1
 .equ	counttick,	2	; speed up simulation
 .else
-.equ	counttick,	5
+.equ	counttick,	scanfreq/counthz	; should be integer
 .endif	; debug
 
 ; location doubles as powerfail indicator
-.equ	powerfail,	14+clockoff
+.equ	powerfail,	0x3e
 
-.equ	hzcounter,	15+clockoff
-
-.if	debug == 1
-.equ	counthz,	2	; speed up simulation
-.else
-.equ	counthz,	50	; mains frequency
-.endif	; debug
+.equ	hzcounter,	0x3f
 
 .equ	colonplace,	2	; hours serves colon
 
@@ -180,7 +195,7 @@
 	.org	7
 	sel	rb1
 	mov	r7, a		; save a
-	mov	a, #scandiv	; restart timer
+	mov	a, #tcount	; restart timer
 	mov	t, a
 	strt	t
 .if	tm1637 == 1
@@ -191,13 +206,12 @@
 	mov	r0, #hzcounter
 	mov	a, @r0
 	add	a, #256-(counthz/2)
-.if	freerun == 1
-.else
+.ifdef	mains
 	jc	firsthalf	; in first half of second
 	mov	r0, #powerfail	; make colon 3/4 second on before buttons used
 	add	a, @r0
 firsthalf:
-.endif
+.endif	; mains
 ; C means in first half of second or first 3/4 if buttons not used yet
 	mov	r0, #scand
 	mov	a, @r0
@@ -288,11 +302,10 @@ swaction:
 	call	incmin
 	call	inchour
 swactioned:
-.if	freerun == 1
-.else
+.ifdef	mains
 	mov	r0, #powerfail	; button was clicked
 	mov	@r0, #0
-.endif	; freerun
+.endif	; mains
 	mov	r0, #swtent
 	mov	a, @r0
 	mov	r0, #swstate
@@ -396,26 +409,25 @@ ticktock:
 	mov	@r0, #34
 	mov	r0, #hr
 	mov	@r0, #12
-.if	tm1637 == 1
+.if	brightcontrol == 1
 	mov	r0, #currbright
-	mov	a, #maxbright
+	mov	a, #defbright
 	mov	@r0, a
 	call	setbright
-.endif
+.endif	; brightcontrol
 	call	updatedisplay
-.if	freerun == 1
-	mov	r0, #tickcounter
-	mov	@r0, #counttick
-.else
+.ifdef	mains
 	mov	r0, #powerfail
 	mov	@r0, #counthz/4	; so colon blink is asymmetric on power up
 	mov	a, psw		; initialise saved psw
 	mov	r0, #savepsw
 	mov	@r0, a
-.endif	; tm1637
+.endif	; mains
+	mov	r0, #tickcounter
+	mov	@r0, #counttick
 	mov	r0, #hzcounter
 	mov	@r0, #counthz
-	mov	a, #scandiv	; setup timer and enable its interrupt
+	mov	a, #tcount	; setup timer and enable its interrupt
 	mov	t, a
 	strt	t
 	en	tcnti
@@ -425,15 +437,32 @@ ticktock:
 ; main loop
 workloop:
 	jtf	ticked
+.if	tm1637 == 1
+.else
+.if	brightcontrol == 1	; PWM method
+	mov	r0, #brightthresh
+	mov	a, t
+	add	a, @r0
+	jb7	leaveon
+.if	highison == 1
+	anl	p1, #0x00
+.else
+	orl	p1, #0xff
+.endif	; highison
+leaveon:
+.endif	; brightcontrol
+.endif	; tm1637
 	jmp	workloop	; wait until tick is up
 ticked:
 	call	tickhandler
 	jnc	noadv
 	call	incsec
 	call	updatedisplay
+.if	tm1637 == 1
 .if	blinkp25 == 1
 	orl	p2, #blink1mask	; turn off blink
 .endif	; blinkp25
+.endif	; tm1637
 noadv:
 	call	switch
 	jmp	workloop
@@ -442,14 +471,7 @@ noadv:
 tickhandler:
 	clr	c
 	clr	f0
-.if	freerun == 1
-	mov	r0, #tickcounter
-	mov	a, @r0
-	dec	a
-	mov	@r0, a
-	jnz	igntick		; tick to 1/Hz-th
-	mov	@r0, #counttick
-.else
+.ifdef	mains
 .if	debug == 1
 	in	a, p2		; simulate mains frequency with p21 on simulator
 	anl	a, #p21
@@ -468,7 +490,13 @@ intlow:
 	jb5	igntick		; transition already seen
 	mov	a, psw		; save f0 state to turn on
 	mov	@r0, a
-.endif	; freerun
+.endif	; mains
+	mov	r0, #tickcounter
+	mov	a, @r0
+	dec	a
+	mov	@r0, a
+	jnz	igntick		; tick to 1/Hz-th
+	mov	@r0, #counttick
 .if	tm1637 == 1
 	mov	r0, #hzcounter
 	mov	a, @r0
@@ -520,7 +548,7 @@ incsec:
 noover:
 	ret
 
-; convert binary values to 7-segment patterns
+; convert binary values to segment patterns
 updatedisplay:
 	mov 	r1, #sr
 	mov	a, @r1
@@ -541,6 +569,8 @@ updatedisplay:
 .endif	; tm1637
 
 	.org	0x200
+
+page2:
 ;
 ; TM1637 handling routines translated from C code at
 ; https://blog.3d-logic.com/2015/01/21/arduino-and-the-tm1637-4-digit-seven-segment-display/
@@ -629,6 +659,19 @@ setbright:
 	call	stopxfer
 	ret
 
+.else
+
+setbright:
+	mov	r0, #currbright
+	mov	a, @r0
+	add	a, #brighttable-page2
+	movp	a, @a
+	mov	r0, #brightthresh
+	mov	@r0, a
+	ret
+
+.endif	; tm1637
+
 .if	brightcontrol == 1
 incbright:
 	clr	c
@@ -656,9 +699,21 @@ nosingle:			; don't trigger any single actions
 	cpl	c
 noincbright:
 	ret
-.endif	; brightcontrol
 
+.if	tm1637 == 1
+.else
+brighttable:			; only for direct drive
+	.db	timerdiv-timerdiv/16
+	.db	timerdiv-(timerdiv*2)/16
+	.db	timerdiv-(timerdiv*4)/16
+	.db	timerdiv-(timerdiv*11)/16
+	.db	timerdiv-(timerdiv*12)/16
+	.db	timerdiv-(timerdiv*13)/16
+	.db	timerdiv-(timerdiv*14)/16
+	.db	timerdiv-timerdiv
 .endif	; tm1637
+
+.endif	; brightcontrol
 
 .if	blinktest == 1
 ;
@@ -666,7 +721,7 @@ noincbright:
 ;
 .equ	p25on,		0xdf
 .equ	p25off,		0xff
-.equ	delaycount,	125
+.equ	delaycount,	scanfreq/2
 
 blink:
 	mov	a, #p25on
@@ -680,7 +735,7 @@ blink:
 delay500ms:
 	mov	r0, #delaycount
 another4ms:
-	mov	a, #scandiv	; restart timer
+	mov	a, #tcount	; restart timer
 	mov	t, a
 	strt	t
 busy4ms:
@@ -768,12 +823,12 @@ page3:
 
 ; font table. (beware of 8048 movp "page" limitation)
 ; 1's for lit segment since this turns on cathodes
-; For TM1637: MSB=colon LSB=a
-; Else: MSB=colon LSB=g
+; MSB=colon LSB=a
 ; entries for 10-15 are for blanking
+; second half of each table is for 6 segments, add 16 to get there
 
 dfont:
-.if	tm1637 == 1
+.if	highison == 1
 	.db	0x3f	; 0
 	.db	0x06	; 1
 	.db	0x5b
@@ -791,34 +846,16 @@ dfont:
 	.db	0x00
 	.db	0x00
 .else
-.if	highison == 1
-	.db	0x7e	; 0
-	.db	0x30	; 1
-	.db	0x6d
-	.db	0x79
-	.db	0x33
-	.db	0x5b
-	.db	0x5f
-	.db	0x70
-	.db	0x7f
-	.db	0x73
-	.db	0x00
-	.db	0x00
-	.db	0x00
-	.db	0x00
-	.db	0x00
-	.db	0x00
-.else
-	.db	~0x7e	; 0
-	.db	~0x30	; 1
-	.db	~0x6d
-	.db	~0x79
-	.db	~0x33
+	.db	~0x3f	; 0
+	.db	~0x06	; 1
 	.db	~0x5b
-	.db	~0x5f
-	.db	~0x70
+	.db	~0x4f
+	.db	~0x66
+	.db	~0x6d
+	.db	~0x7d
+	.db	~0x07
 	.db	~0x7f
-	.db	~0x73
+	.db	~0x6f
 	.db	~0x00
 	.db	~0x00
 	.db	~0x00
@@ -826,7 +863,6 @@ dfont:
 	.db	~0x00
 	.db	~0x00
 .endif	; highison
-.endif	; tm1637
 
 ; convert byte to 7 segment
 ; a - input, r1 -> 2 byte storage
@@ -868,7 +904,7 @@ ident:
 	.db	0x59, 0x61, 0x70
 	.db	0x20
 	.db	0x32, 0x30	; 20
-	.db	0x31, 0x38	; 18
+	.db	0x31, 0x39	; 19
 	.db	0x0
 
 ; end
