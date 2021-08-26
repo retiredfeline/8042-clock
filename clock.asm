@@ -19,8 +19,9 @@
 ; if 1 a blink program will be executed instead
 .equ	blinktest,	0
 
-; 0 = mains frequency input on I pin, 1 = free running, no mains input
+; timing source, define only one
 .equ	intxtal,	1	; MCU clock
+;.equ	mains,		1	; mains
 
 ; 0 = driving multiplexed display, 1 = using TM1637 serial display
 .equ	tm1637,		1
