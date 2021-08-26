@@ -12,7 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .ifdef	.__.CPU.		; if we are using as8048 this is defined
-.8041
+.8048				; jobf needed
 .area	CODE	(ABS)
 .endif	; .__.CPU.
 
@@ -43,17 +43,17 @@
 .equ	timerdiv,	3	; speed up simulation
 .endif	; blink
 .else
-.equ	timerdiv,	100	; 250 Hz with 12.000 MHz crystal
+;.equ	timerdiv,	100	; 250 Hz with 12.000 MHz crystal
 ;.equ	timerdiv,	100	; 200 Hz with 9.600 MHz crystal
 ;.equ	timerdiv,	64	; 200 Hz with 6.144 MHz crystal
 ;.equ	timerdiv,	50	; 250 Hz with 6.000 MHz crystal
 ;.equ	timerdiv,	44	; 240 Hz with 5.0688 MHz crystal
-;.equ	timerdiv,	40	; 256 Hz with 4.9152 MHz crystal
+.equ	timerdiv,	40	; 256 Hz with 4.9152 MHz crystal
 ;.equ	timerdiv,	32	; 240 Hz with 3.6864 MHz crystal
 .endif	; debug
 .equ	tcount,		-timerdiv
 
-.equ	scanfreq,	250	; resulting scan frequency, see above
+.equ	scanfreq,	256	; resulting scan frequency, see above
 
 ; these are in 1/100ths of second, multiply by scanfreq to get counts
 .equ	depmin,		scanfreq*10/100	; down 1/10th s to register
@@ -149,7 +149,7 @@
 .if	debug == 1
 .equ	counthz,	2	; speed up simulation
 .else
-.equ	counthz,	50	; "mains" frequency, must suit scanfreq
+.equ	counthz,	64	; "mains" frequency, must suit scanfreq
 .endif	; debug
 
 ; divide tick to get mains frequency
@@ -478,7 +478,7 @@ tickhandler:
 	anl	a, #p21
 	jz	intlow
 .else
-	jni	intlow
+	jobf	intlow		; use p2.4 as mains sampling pin
 .endif	; debug
 	mov	r0, #savepsw
 	mov	a, psw		; save f0 state
