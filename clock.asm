@@ -23,8 +23,9 @@
 .equ	intxtal,	1	; MCU clock
 ;.equ	mains,		1	; mains
 
-; 0 = driving multiplexed display, 1 = using TM1637 serial display
-.equ	tm1637,		1
+; display, define only one
+;.equ	muxdisp,	1	; multiplex display
+.equ	tm1637,		1	; external TM1637 display
 
 ; 0 = no brightness control, 1 = both buttons = cycle brightness
 .equ	brightcontrol,	1
@@ -77,7 +78,7 @@
 .equ	p23rmask,	~p23
 .equ	swmask,		p23|p22
 
-.if	tm1637 == 1
+.ifdef	tm1637
 ;
 ; for driving TM1637 based display with 2 lines
 ;
@@ -199,9 +200,7 @@
 	mov	a, #tcount	; restart timer
 	mov	t, a
 	strt	t
-.if	tm1637 == 1
-				; no interrupt work, TM1637 handles display
-.else
+.ifdef	muxdisp
 	anl	p1, #0x00	; turn off all segments
 ; work out if we need to turn on colon
 	mov	r0, #hzcounter
@@ -257,7 +256,7 @@ colonhere:
 	anl	a, r4		; r4 contains 0xff or 0x7f
 .endif	; highison
 	outl	p1, a		; output digit
-.endif	; tm1637
+.endif	; muxdisp
 	mov	a, r7		; restore a
 	retr
 
@@ -385,11 +384,10 @@ noinchour:
 ticktock:
 	clr	f0		; zero some registers and other cold boot stuff
 	sel	rb0
-.if	tm1637 == 1
-.else
+.ifdef	muxdisp
 	mov 	r0, #scand	; set up digit scan parameters
 	mov 	@r0, #scancnt
-.endif	; tm1637
+.endif	; muxdisp
 	mov	a, #0xff
 	outl	p2, a		; p2 is all input
 	anl	a, #swmask	; isolate switch bits
@@ -438,8 +436,7 @@ ticktock:
 ; main loop
 workloop:
 	jtf	ticked
-.if	tm1637 == 1
-.else
+.ifdef	muxdisp
 .if	brightcontrol == 1	; PWM method
 	mov	r0, #brightthresh
 	mov	a, t
@@ -452,14 +449,14 @@ workloop:
 .endif	; highison
 leaveon:
 .endif	; brightcontrol
-.endif	; tm1637
+.endif	; muxdisp
 	jmp	workloop	; wait until tick is up
 ticked:
 	call	tickhandler
 	jnc	noadv
 	call	incsec
 	call	updatedisplay
-.if	tm1637 == 1
+.ifdef	tm1637
 .if	blinkp25 == 1
 	orl	p2, #blink1mask	; turn off blink
 .endif	; blinkp25
@@ -498,7 +495,7 @@ intlow:
 	mov	@r0, a
 	jnz	igntick		; tick to 1/Hz-th
 	mov	@r0, #counttick
-.if	tm1637 == 1
+.ifdef	tm1637
 	mov	r0, #hzcounter
 	mov	a, @r0
 	xrl	a, #counthz/2	; halfway through second?
@@ -563,10 +560,11 @@ updatedisplay:
 	mov 	a, @r1
 	mov 	r1, #sdh1
 	call	byte2segment
-.if	tm1637 == 1
-	jmp	updatetm1637
-.else
+.ifdef	muxdisp
 	ret
+.endif	;muxdisp
+.ifdef	tm1637
+	jmp	updatetm1637
 .endif	; tm1637
 
 	.org	0x200
@@ -576,7 +574,7 @@ page2:
 ; TM1637 handling routines translated from C code at
 ; https://blog.3d-logic.com/2015/01/21/arduino-and-the-tm1637-4-digit-seven-segment-display/
 ;
-.if	tm1637 == 1
+.ifdef	tm1637
 updatetm1637:
 	call	startxfer
 	mov	a, #0x40
@@ -660,7 +658,9 @@ setbright:
 	call	stopxfer
 	ret
 
-.else
+.endif	; tm1637
+
+.ifdef	muxdisp
 
 setbright:
 	mov	r0, #currbright
@@ -671,7 +671,7 @@ setbright:
 	mov	@r0, a
 	ret
 
-.endif	; tm1637
+.endif	; muxdisp
 
 .if	brightcontrol == 1
 incbright:
@@ -701,8 +701,7 @@ nosingle:			; don't trigger any single actions
 noincbright:
 	ret
 
-.if	tm1637 == 1
-.else
+.ifdef	muxdisp
 brighttable:			; only for direct drive
 	.db	timerdiv-timerdiv/16
 	.db	timerdiv-(timerdiv*2)/16
@@ -712,7 +711,7 @@ brighttable:			; only for direct drive
 	.db	timerdiv-(timerdiv*13)/16
 	.db	timerdiv-(timerdiv*14)/16
 	.db	timerdiv-timerdiv
-.endif	; tm1637
+.endif	; muxdisp
 
 .endif	; brightcontrol
 
@@ -884,8 +883,7 @@ byte2segment:
 	mov 	@r1, a		; save it
 	ret
 
-.if	tm1637 == 1		; not needed for external display
-.else
+.ifdef	muxdisp
 ; convert digit number 0-3 to for port 2 high nybble
 digit2mask:
 	.db	~0x10		; p2.4 is min
@@ -896,7 +894,7 @@ digit2mask:
 	.db	~0x00
 	.db	~0x00
 	.db	~0x00
-.endif	; tm1637
+.endif	; muxdisp
 
 ident:
 	.db	0x0
