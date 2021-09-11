@@ -26,6 +26,7 @@
 ; display, define only one
 ;.equ	muxdisp,	1	; multiplex display
 .equ	tm1637,		1	; external TM1637 display
+;.equ	srdisp,		1	; 74HC595 16 LED display
 
 ; 0 = no brightness control, 1 = both buttons = cycle brightness
 .equ	brightcontrol,	1
@@ -100,6 +101,24 @@
 .equ	maxbright,	0x7	; full brightness
 .equ	defbright,	(maxbright+minbright)/2
 .endif	; tm1637
+
+.ifdef	srdisp
+;
+; for driving 74HC595 display with 3 lines
+;
+.equ	data1mask,	0x80	; p2.7
+.equ	data0mask,	~data1mask&0xff
+.equ	clk1mask,	0x40	; p2.6
+.equ	clk0mask,	~clk1mask&0xff
+.equ	load1mask,	0x20	; p2.5
+.equ	load0mask,	~load1mask&0xff
+.equ	blinkp24,	1
+.equ	blink1mask,	0x10	; p2.4
+.equ	blink0mask,	~blink1mask
+.equ	highison,	0
+;.equ	srbcd,		1	; if set, display BCD instead of binary
+.equ	brightcontrol,	0	; no brightness control
+.endif	; srdisp
 
 ; scan digit storage (6 digits)
 ; sds1 seconds 1's digit
@@ -461,6 +480,11 @@ ticked:
 	orl	p2, #blink1mask	; turn off blink
 .endif	; blinkp25
 .endif	; tm1637
+.ifdef	srdisp
+.if	blinkp24 == 1
+	orl	p2, #blink1mask	; turn off blink
+.endif	; blinkp24
+.endif	; srdisp
 noadv:
 	call	switch
 	jmp	workloop
@@ -499,7 +523,7 @@ intlow:
 	mov	r0, #hzcounter
 	mov	a, @r0
 	xrl	a, #counthz/2	; halfway through second?
-	jnz	nocolon
+	jnz	blinkoff
 	mov	r0, #sdm1+colonplace
 	mov	a, @r0
 	orl	a, #colon1mask
@@ -508,8 +532,17 @@ intlow:
 .if	blinkp25 == 1
 	anl	p2, #blink0mask	; pull low to turn on
 .endif	; blinkp25
-nocolon:
 .endif	; tm1637
+.ifdef	srdisp
+.if	blinkp24 == 1
+	mov	r0, #hzcounter
+	mov	a, @r0
+	xrl	a, #counthz/2	; halfway through second?
+	jnz	blinkoff
+	anl	p2, #blink0mask	; pull low to turn on
+.endif	; blinkp24
+.endif	; srdisp
+blinkoff:
 	mov	r0, #hzcounter
 	mov	a, @r0
 	dec	a
@@ -566,6 +599,9 @@ updatedisplay:
 .ifdef	tm1637
 	jmp	updatetm1637
 .endif	; tm1637
+.ifdef	srdisp
+	jmp	updatesrdisp
+.endif	; srdisp
 
 	.org	0x200
 
@@ -672,6 +708,54 @@ setbright:
 	ret
 
 .endif	; muxdisp
+
+.ifdef	srdisp
+;
+; code to shift binary hours and minutes to shift register, then load
+;
+updatesrdisp:
+	anl	p2, #data0mask & #clk0mask & #load0mask	; clear to 0
+	mov	r0, #mr		; minutes are MSB in SR
+	mov	a, @r0
+.ifdef	srbcd
+	movp3	a, @a
+.endif	; srbcd
+	call	srbyte
+	mov	r0, #hr
+	mov	a, @r0
+.ifdef	srbcd
+	movp3	a, @a
+.endif	; srbcd
+	call	srbyte
+	orl	p2, #load1mask	; pulse load
+	nop
+	anl	p2, #load0mask
+	ret
+
+;
+; left shift 8 bits of A into data pin
+;
+srbyte:
+	mov	r0, #8
+srbit:
+	rlc	a
+.if	highison == 1
+	jc	srbit1
+.else
+	jnc	srbit1
+.endif	; highison
+	anl	p2, #data0mask
+	jmp	srbit2
+srbit1:
+	orl	p2, #data1mask
+srbit2:				; pulse clock
+	orl	p2, #clk1mask	; need a delay?
+	nop
+	anl	p2, #clk0mask
+	djnz	r0, srbit
+	ret
+
+.endif	; srdisp
 
 .if	brightcontrol == 1
 incbright:
@@ -903,7 +987,7 @@ ident:
 	.db	0x59, 0x61, 0x70
 	.db	0x20
 	.db	0x32, 0x30	; 20
-	.db	0x31, 0x39	; 19
+	.db	0x32, 0x31	; 21
 	.db	0x0
 
 ; end
