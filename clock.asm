@@ -31,8 +31,8 @@
 ; 0 = no brightness control, 1 = both buttons = cycle brightness
 .equ	brightcontrol,	1
 
-; 0 = 0 bit turns on, 1 = 1 bit turns on segment, direct drive only
-.equ	highison,	1	; using 7406 inverting buffer
+; 0 = 0 bit turns on, 1 = 1 bit turns on segment, muxdisp and srdisp
+.equ	highison,	0
 
 ; timing information.
 ; clk / 5 -- ale (osc / 15). "provided continuously" (pin 11)
