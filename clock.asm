@@ -990,4 +990,23 @@ ident:
 	.db	0x32, 0x31	; 21
 	.db	0x0
 
+.ifdef	.__.CPU.		; if we are using as8048 this is defined
+; embed some option strings to identify ROM
+.ifdef	intxtal
+	.asciz	"intxtal"
+.endif	; intxtal
+.ifdef	mains
+	.asciz	"mains"
+.endif	; mains
+.ifdef	muxdisp
+	.asciz	"muxdisp"
+.endif	; muxdisp
+.ifdef	tm1637
+	.asciz	"tm1637"
+.endif	; tm1637
+.ifdef	srdisp
+	.asciz	"srdisp"
+.endif	; srdisp
+.endif	; .__.CPU.
+
 ; end
