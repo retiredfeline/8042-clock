@@ -5,7 +5,7 @@
 ;
 .equ	debug,		0
 
-; 8042 7 segment clock
+; 804[1289] 6/7 segment clock
 
 ; This code is under MIT license. Ken Yap
 
@@ -643,8 +643,13 @@ blinkoff:			; now handle hz
 	anl	a, #p21
 	jz	intlow
 .else
+.if	.__.CPU. == 0		; 8048/9
+;	jni	intlow		; causes syntax error with 8041/2
+.endif
+.if	.__.CPU. == 1		; 8041/2
 	in	a, p2
 	jb4	intlow		; use p2.4 as mains sampling pin
+.endif
 .endif	; debug
 	mov	r0, #savepsw
 	mov	a, psw		; save f0 state
