@@ -12,7 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .ifdef	.__.CPU.		; if we are using as8048 this is defined
-.8048				; jobf needed
+.8048
 .area	CODE	(ABS)
 .endif	; .__.CPU.
 
@@ -490,35 +490,15 @@ noadv:
 	jmp	workloop
 
 ; called once per tick
-tickhandler:
-	clr	c
-	clr	f0
-.ifdef	mains
-.if	debug == 1
-	in	a, p2		; simulate mains frequency with p21 on simulator
-	anl	a, #p21
-	jz	intlow
-.else
-	jobf	intlow		; use p2.4 as mains sampling pin
-.endif	; debug
-	mov	r0, #savepsw
-	mov	a, psw		; save f0 state
-	mov	@r0, a		; f0 is !I
-	ret
-intlow:
-	cpl	f0		; f0 is !I
-	mov	r0, #savepsw	; was f0 previously 0?
-	mov	a, @r0
-	jb5	igntick		; transition already seen
-	mov	a, psw		; save f0 state to turn on
-	mov	@r0, a
-.endif	; mains
+tickhandler:			; handle blink first
+.ifdef	intxtal			; keep track only if using internal xtal
 	mov	r0, #tickcounter
 	mov	a, @r0
 	dec	a
 	mov	@r0, a
-	jnz	igntick		; tick to 1/Hz-th
+	jnz	blinkoff	; ignore this tick
 	mov	@r0, #counttick
+.endif	; intxtal
 .ifdef	tm1637
 	mov	r0, #hzcounter
 	mov	a, @r0
@@ -542,15 +522,38 @@ intlow:
 	anl	p2, #blink0mask	; pull low to turn on
 .endif	; blinkp24
 .endif	; srdisp
-blinkoff:
+blinkoff:			; now handle hz
+	clr	c
+	clr	f0
+.ifdef	mains
+.if	debug == 1
+	in	a, p2		; simulate mains frequency with p21 on simulator
+	anl	a, #p21
+	jz	intlow
+.else
+	in	a, p2
+	jb4	intlow		; use p2.4 as mains sampling pin
+.endif	; debug
+	mov	r0, #savepsw
+	mov	a, psw		; save f0 state
+	mov	@r0, a		; f0 is !I
+	ret
+intlow:
+	cpl	f0		; f0 is !I
+	mov	r0, #savepsw	; was f0 previously 0?
+	mov	a, @r0
+	jb5	ignint		; transition already seen
+	mov	a, psw		; save f0 state to turn on
+	mov	@r0, a
+.endif	; mains
 	mov	r0, #hzcounter
 	mov	a, @r0
 	dec	a
 	mov	@r0, a
-	jnz	igntick
+	jnz	ignint
 	mov	@r0, #counthz	; reinitialise Hz counter
 	cpl	c		; set carry if second up
-igntick:
+ignint:
 	ret
 
 ; increment second and carry to minute and hour on overflow
