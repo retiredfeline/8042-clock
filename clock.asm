@@ -12,7 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .ifdef	.__.CPU.		; if we are using as8048 this is defined
-.8048
+.8041
 .area	CODE	(ABS)
 .endif	; .__.CPU.
 
@@ -22,6 +22,7 @@
 ; timing source, define only one
 .equ	intxtal,	1	; MCU clock
 ;.equ	mains,		1	; mains
+;.equ	rtc,		1	; DS1287 RTC
 
 ; display, define only one
 ;.equ	muxdisp,	1	; multiplex display
@@ -30,6 +31,9 @@
 
 ; 0 = no brightness control, 1 = both buttons = cycle brightness
 .equ	brightcontrol,	1
+
+; 0 = 7 segment, 1 = 6 segment
+.equ	sixseg,		0
 
 ; 0 = 0 bit turns on, 1 = 1 bit turns on segment, muxdisp and srdisp
 .equ	highison,	0
@@ -45,7 +49,6 @@
 .equ	timerdiv,	3	; speed up simulation
 .endif	; blink
 .else
-;.equ	timerdiv,	100	; 250 Hz with 12.000 MHz crystal
 ;.equ	timerdiv,	100	; 200 Hz with 9.600 MHz crystal
 ;.equ	timerdiv,	64	; 200 Hz with 6.144 MHz crystal
 ;.equ	timerdiv,	50	; 250 Hz with 6.000 MHz crystal
@@ -155,7 +158,11 @@
 ; saved PSW for checking previous F0
 .equ	savepsw,	0x2f
 
-.equ	clockoff,	0x30	; put clock values at top of RAM
+.ifdef	rtc
+.equ	clockoff,	0	; RTC is addressed as external RAM
+.else
+.equ	clockoff,	0x30	; put clock values at top of internal RAM
+.endif	; rtc
 
 .equ	sr,		0+clockoff
 .equ	sra,		1+clockoff
@@ -163,16 +170,35 @@
 .equ	mra,		3+clockoff
 .equ	hr,		4+clockoff
 .equ	hra,		5+clockoff
+.equ	crga,		10+clockoff
+.equ	crgb,		11+clockoff
+.equ	crgc,		12+clockoff
+.equ	crgd,		13+clockoff
+
+.equ	oscon,		0x20	; turn oscillator on
+.equ	disrtc,		0x86	; disable RTC, binary, 24H
+.equ	enrtc,		0x06	; enable RTC, binary, 24H
+.equ	uipbit,		0x80	; update in progress
+
+; even with RTC, these are used to implement the seconds blink so should be
+; roughly correct but a small discrepancy won't be noticed
+;
+; a future version could use the periodic flag to drive the blink if desired
 
 .equ	tickcounter,	0x3e
 
 .if	debug == 1
 .equ	counthz,	2	; speed up simulation
 .else
-.equ	counthz,	64	; "mains" frequency, must suit scanfreq
+.ifdef	mains
+.equ	counthz,	50	; mains frequency
+.else
+.equ	counthz,	64	; virtual mains frequency, must suit scanfreq
+.endif	; mains
 .endif	; debug
 
-; divide tick to get mains frequency
+; if mains is the timing source, ticks are only used for scanning
+; divide tick to get virtual mains frequency
 .if	debug == 1
 .equ	counttick,	2	; speed up simulation
 .else
@@ -331,7 +357,19 @@ swactioned:
 	mov	@r0, a
 	ret
 
+.ifdef	rtc
+waitforrtc:
+	mov	r1, #crga
+	movx	a, @r1
+	anl	a, #uipbit
+	jnz	waitforrtc
+	ret
+.endif	; rtc
+
 incmin:
+.ifdef	rtc
+	call	waitforrtc
+.endif	; rtc
 	mov	r0, #swtent
 	mov	a, @r0
 	jb2	noincmin	; first time through?
@@ -349,15 +387,31 @@ minwaitover:
 	mov	@r0, #rptperiod
 inc1min:
 	mov	r0, #mr
+.ifdef	rtc
+	movx	a, @r0
+	inc	a
+	movx	@r0, a
+.else
 	mov	a, @r0
 	inc	a
 	mov	@r0, a
+.endif	; rtc
 	add 	a, #196		; test for 60 minute overflow
 	jnc 	mindone
+.ifdef	rtc
+	clr	a
+	movx	@r0, a
+.else
 	mov	@r0, #0		; yep overflow, reset to zero and update display
+.endif	; rtc
 mindone:
 	mov	r0, #sr
+.ifdef	rtc
+	clr	a
+	movx	@r0, a
+.else
 	mov	@r0, #0
+.endif	;rtc
 	call 	updatedisplay
 	ret
 noincmin:
@@ -366,6 +420,9 @@ noincmin:
 	ret
 
 inchour:
+.ifdef	rtc
+	call	waitforrtc
+.endif	;rtc
 	mov	r0, #swtent
 	mov	a, @r0
 	jb3	noinchour	; first time through?
@@ -383,12 +440,23 @@ hourwaitover:
 	mov	@r0, #rptperiod
 inc1hour:
 	mov	r0, #hr
+.ifdef	rtc
+	movx	a, @r0
+	inc	a
+	movx	@r0, a
+.else
 	mov	a, @r0
 	inc	a
 	mov	@r0, a
+.endif	; rtc
 	add 	a, #232
 	jnc 	hourdone
+.ifdef	rtc
+	clr	a
+	movx	@r0, a
+.else
 	mov	@r0, #0		; yep overflow, reset to zero and update display
+.endif	; rtc
 hourdone:
 	call 	updatedisplay
 	ret
@@ -420,6 +488,49 @@ ticktock:
 	mov	@r0, #rptthresh
 	mov	r0, #hrepeat
 	mov	@r0, #rptthresh
+.ifdef	rtc
+; don't preset RTC each power up, just setup RTC access, correct invalid values
+; and enable oscillator
+	mov	r0, #crga
+	mov	a, #oscon
+	movx	@r0, a
+; pause internal functions
+	mov	r0, #crgb
+	mov	a, #disrtc
+	movx	@r0, a
+; initialise alarm to 0xc0 = don't care
+	mov	r0, #sra
+	mov	a, #0xc0
+	movx	@r0, a
+	mov	r0, #mra
+	movx	@r0, a
+	mov	r0, #hra
+	movx	@r0, a
+; correct invalid register values
+	mov	r0, #mr
+	movx	a, @r0
+	inc	a
+	movx	@r0, a
+	add 	a, #196		; >= 60?
+	jnc 	minvalid
+	clr	a
+	movx	@r0, a
+;
+minvalid:
+	mov	r0, #hr
+	movx	a, @r0
+	inc	a
+	movx	@r0, a
+	add 	a, #232		; >= 24?
+	jnc 	hourvalid
+	clr	a
+	movx	@r0, a
+hourvalid:
+; reenable internal functions
+	mov	r0, #crgb
+	mov	a, #enrtc
+	movx	@r0, a
+.else
 ; set 12:34:56 as initial data
 	mov	r0, #sr
 	mov	@r0, #56
@@ -427,6 +538,7 @@ ticktock:
 	mov	@r0, #34
 	mov	r0, #hr
 	mov	@r0, #12
+.endif	; rtc
 .if	brightcontrol == 1
 	mov	r0, #currbright
 	mov	a, #defbright
@@ -558,6 +670,9 @@ ignint:
 
 ; increment second and carry to minute and hour on overflow
 incsec:
+.ifdef	rtc
+; RTC will increment by itself
+.else
 	mov 	r0, #sr
 	mov	a, @r0
 	inc	a
@@ -580,20 +695,54 @@ incsec:
 	jnc	noover
 	mov	@r0, #0		; reset hours to 0
 noover:
+.endif	; rtc
 	ret
 
 ; convert binary values to segment patterns
 updatedisplay:
+.ifdef	rtc
+.if	debug == 1
+	mov	r1, #sr
+	mov	a, #56
+	movx	@r1, a
+	mov	r1, #mr
+	mov	a, #34
+	movx	@r1, a
+	mov	r1, #hr
+	mov	a, #12
+	movx	@r1, a
+.else
+; if RTC busy come back later
+	mov	r1, #crga
+	movx	a, @r1
+	anl	a, #uipbit
+	jz	rtcready
+	ret
+rtcready:
+.endif	; debug
+.endif	; rtc
 	mov 	r1, #sr
+.ifdef	rtc
+	movx	a, @r1
+.else
 	mov	a, @r1
+.endif	; rtc
 	mov 	r1, #sds1
 	call	byte2segment
 	mov	r1, #mr
+.ifdef	rtc
+	movx	a, @r1
+.else
 	mov 	a, @r1
+.endif	; rtc
 	mov 	r1, #sdm1
 	call	byte2segment
 	mov	r1, #hr
+.ifdef	rtc
+	movx	a, @r1
+.else
 	mov 	a, @r1
+.endif	; rtc
 	mov 	r1, #sdh1
 	call	byte2segment
 .ifdef	muxdisp
@@ -915,6 +1064,43 @@ page3:
 ; second half of each table is for 6 segments, add 16 to get there
 
 dfont:
+.if	sixseg == 1
+.if	highison == 1
+	.db	0x1c	; 0
+	.db	0x12	; 1
+	.db	0x1b
+	.db	0x0f
+	.db	0x32
+	.db	0x2d
+	.db	0x1e
+	.db	0x13
+	.db	0x3f
+	.db	0x33
+	.db	0x00
+	.db	0x00
+	.db	0x00
+	.db	0x00
+	.db	0x00
+	.db	0x00
+.else
+	.db	~0x1c	; 0
+	.db	~0x12	; 1
+	.db	~0x1b
+	.db	~0x0f
+	.db	~0x32
+	.db	~0x2d
+	.db	~0x1e
+	.db	~0x13
+	.db	~0x3f
+	.db	~0x33
+	.db	~0x00
+	.db	~0x00
+	.db	~0x00
+	.db	~0x00
+	.db	~0x00
+	.db	~0x00
+.endif	; highison
+.else
 .if	highison == 1
 	.db	0x3f	; 0
 	.db	0x06	; 1
@@ -950,6 +1136,7 @@ dfont:
 	.db	~0x00
 	.db	~0x00
 .endif	; highison
+.endif	; sixseg
 
 ; convert byte to 7 segment
 ; a - input, r1 -> 2 byte storage
@@ -1001,6 +1188,9 @@ ident:
 .ifdef	mains
 	.asciz	"mains"
 .endif	; mains
+.ifdef	rtc
+	.asciz	"rtc"
+.endif	;rtc
 .ifdef	muxdisp
 	.asciz	"muxdisp"
 .endif	; muxdisp
