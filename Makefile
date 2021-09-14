@@ -5,6 +5,7 @@
 # but if you just use one assembler change the target to
 # clock.abn, clock.ihx or clock.ibn
 #
+FIRMWARE_END=0x3FF
 
 default:	compare
 
@@ -23,6 +24,10 @@ compare:	clock.ibn clock.zbn clock.abn
 # this is the one we use
 %.ibn:		%.ihx
 		hex2bin -e ibn $<
+
+# generate rom from ibn by adding checksum at end
+%.rom:		%.ibn
+		srec_cat $< -binary -crop 0 $(FIRMWARE_END) -fill 0xFF 0 $(FIRMWARE_END) -checksum-neg-b-e $(FIRMWARE_END) 1 1 -o $(<:.ibn=.rom) -binary
 
 # this one is to compare
 %.zbn:		%.ihx
