@@ -648,7 +648,7 @@ blinkoff:			; now handle hz
 .endif
 .if	.__.CPU. == 1		; 8041/2
 	in	a, p2
-	jb4	intlow		; use p2.4 as mains sampling pin
+	jb3	intlow		; use p2.3 as mains sampling pin
 .endif
 .endif	; debug
 	mov	r0, #savepsw
