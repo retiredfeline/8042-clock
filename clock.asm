@@ -36,7 +36,7 @@
 .equ	sixseg,		0
 
 ; 0 = 0 bit turns on, 1 = 1 bit turns on segment, muxdisp and srdisp
-.equ	highison,	0
+.equ	highison,	1
 
 ; timing information.
 ; clk / 5 -- ale (osc / 15). "provided continuously" (pin 11)
