@@ -604,12 +604,12 @@ noadv:
 
 ; called once per tick
 tickhandler:			; handle blink first
-.ifdef	intxtal			; keep track only if using internal xtal
+.ifdef	intxtal			; divide tick only if using internal xtal
 	mov	r0, #tickcounter
 	mov	a, @r0
 	dec	a
 	mov	@r0, a
-	jnz	blinkoff	; ignore this tick
+	jnz	igntick		; ignore this tick
 	mov	@r0, #counttick
 .endif	; intxtal
 .ifdef	tm1637
@@ -671,6 +671,7 @@ intlow:
 	jnz	ignint
 	mov	@r0, #counthz	; reinitialise Hz counter
 	cpl	c		; set carry if second up
+igntick:
 ignint:
 	ret
 
