@@ -35,8 +35,8 @@
 ; 0 = 7 segment, 1 = 6 segment
 .equ	sixseg,		0
 
-; 0 = 0 bit turns on, 1 = 1 bit turns on segment, muxdisp and srdisp
-.equ	highison,	1
+; 0 = 0 bit turns on, 1 = 1 bit turns on segment
+.equ	highison,	0
 
 ; timing information.
 ; clk / 5 -- ale (osc / 15). "provided continuously" (pin 11)
@@ -96,6 +96,7 @@
 .equ	blinkp25,	1
 .equ	blink1mask,	0x20	; p2.5
 .equ	blink0mask,	~blink1mask
+.equ	highison,	1
 .equ	minbright,	0x88	; 1/16th brightness
 .equ	maxbright,	0x8f	; 14/16 brightness (why not full?)
 .equ	defbright,	(maxbright+minbright)/2
