@@ -604,14 +604,15 @@ noadv:
 
 ; called once per tick
 tickhandler:			; handle blink first
-.ifdef	intxtal			; divide tick only if using internal xtal
+.ifdef	mains			; don't divide tick using mains
+.else				; divide for seconds blink
 	mov	r0, #tickcounter
 	mov	a, @r0
 	dec	a
 	mov	@r0, a
 	jnz	igntick		; ignore this tick
 	mov	@r0, #counttick
-.endif	; intxtal
+.endif	; mains
 .ifdef	tm1637
 	mov	r0, #hzcounter
 	mov	a, @r0
