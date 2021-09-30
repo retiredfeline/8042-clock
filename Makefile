@@ -3,11 +3,11 @@
 #
 # The primary target will use both assemblers and compare the results
 # but if you just use one assembler change the target to
-# clock.abn, clock.ihx or clock.ibn
+# clock.abn, clock.ihx, clock.ibn or clock.rom
 #
 FIRMWARE_END=0x3FF
 
-default:	compare
+default:	clock.rom
 
 compare:	clock.ibn clock.zbn clock.abn
 		cmp clock.abn clock.zbn
