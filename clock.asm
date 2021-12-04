@@ -120,7 +120,9 @@
 .equ	blink1mask,	0x10	; p2.4
 .equ	blink0mask,	~blink1mask
 .equ	highison,	0
+; zero or one of the two options should be chosen
 ;.equ	srbcd,		1	; if set, display BCD instead of binary
+;.equ	srtcd,		1	; if set, display TCD instead of binary
 .equ	brightcontrol,	0	; no brightness control
 .endif	; srdisp
 
@@ -880,12 +882,20 @@ updatesrdisp:
 .ifdef	srbcd
 	movp3	a, @a
 .endif	; srbcd
+.ifdef	srtcd
+	add	a, #tcdtab-page3
+	movp3	a, @a
+.endif	; srtcd
 	call	srbyte
 	mov	r0, #hr
 	mov	a, @r0
 .ifdef	srbcd
 	movp3	a, @a
 .endif	; srbcd
+.ifdef	srtcd
+	add	a, #tcdtab-page3
+	movp3	a, @a
+.endif	; srtcd
 	call	srbyte
 	orl	p2, #load1mask	; pulse load
 	nop
@@ -1064,6 +1074,70 @@ page3:
 	.db	0x58
 	.db	0x59
 	.db	0x60	; for leap seconds
+
+.ifdef	srtcd
+tcdtab:
+	.db	0x00
+	.db	0x01
+	.db	0x02
+	.db	0x04
+	.db	0x05
+	.db	0x06
+	.db	0x08
+	.db	0x09
+	.db	0x0a
+	.db	0x10
+	.db	0x20
+	.db	0x21
+	.db	0x22
+	.db	0x24
+	.db	0x25
+	.db	0x26
+	.db	0x28
+	.db	0x29
+	.db	0x2a
+	.db	0x30
+	.db	0x40
+	.db	0x41
+	.db	0x42
+	.db	0x44
+	.db	0x45
+	.db	0x46
+	.db	0x48
+	.db	0x49
+	.db	0x4a
+	.db	0x50
+	.db	0x80
+	.db	0x81
+	.db	0x82
+	.db	0x84
+	.db	0x85
+	.db	0x86
+	.db	0x88
+	.db	0x89
+	.db	0x8a
+	.db	0x90
+	.db	0xa0
+	.db	0xa1
+	.db	0xa2
+	.db	0xa4
+	.db	0xa5
+	.db	0xa6
+	.db	0xa8
+	.db	0xa9
+	.db	0xaa
+	.db	0xb0
+	.db	0xc0
+	.db	0xc1
+	.db	0xc2
+	.db	0xc4
+	.db	0xc5
+	.db	0xc6
+	.db	0xc8
+	.db	0xc9
+	.db	0xca
+	.db	0xd0
+.endif	; srtcd
 
 ; font table. (beware of 8048 movp "page" limitation)
 ; 1's for lit segment since this turns on cathodes
