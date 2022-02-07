@@ -284,7 +284,7 @@ colonhere:
 .else
 	cpl	a
 .endif	; highison
-	mov	r4,a		; save colon
+	mov	r4, a		; save colon
 	in	a, p2		; get p2 state
 	anl	a, #0x0f	; low nybble
 	orl	a, #0xf0
@@ -492,6 +492,18 @@ ticktock:
 	mov	r0, #hrepeat
 	mov	@r0, #rptthresh
 .ifdef	rtc
+; delay 2s to allow RTC to settle
+	mov	r0, #250
+another8ms:
+	mov	a, #-(timerdiv*2)	; restart timer
+	mov	t, a
+	strt	t
+busy8ms:
+	jtf	done8ms
+	jmp	busy8ms
+done8ms:
+	stop	tcnt
+	djnz	r0, another8ms
 ; don't preset RTC each power up, just setup RTC access, correct invalid values
 ; and enable oscillator
 	mov	r0, #crga
