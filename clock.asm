@@ -38,6 +38,9 @@
 ; 0 = 0 bit turns on, 1 = 1 bit turns on segment
 .equ	highison,	0
 
+; if defined, display is 12 hour
+;.equ	twelvehour,	1
+
 ; timing information.
 ; clk / 5 -- ale (osc / 15). "provided continuously" (pin 11)
 ; ale / 32 -- "normal" timer rate (osc / 480).
@@ -766,7 +769,11 @@ rtcready:
 	mov 	a, @r1
 .endif	; rtc
 	mov 	r1, #sdh1
+.ifdef	twelvehour
+	call	byte2segment12
+.else
 	call	byte2segment
+.endif	; twelvehour
 .ifdef	muxdisp
 	ret
 .endif	;muxdisp
@@ -872,6 +879,7 @@ setbright:
 
 .ifdef	muxdisp
 
+.if	brightcontrol == 1
 setbright:
 	mov	r0, #currbright
 	mov	a, @r0
@@ -880,6 +888,7 @@ setbright:
 	mov	r0, #brightthresh
 	mov	@r0, a
 	ret
+.endif	; brightcontrol
 
 .endif	; muxdisp
 
@@ -1251,6 +1260,39 @@ byte2segment:
 	mov 	@r1, a		; save it
 	ret
 
+.ifdef	twelvehour
+; convert byte to 7 segment, 12 hour version for hours only
+; a - input, r1 -> 2 byte storage
+
+byte2segment12:
+	mov	r7, a		; save a
+	add	a, #-12		; >= 12?
+	jc	zerotoeleven	; normalised to 0..11
+	mov	a, r7		; use original value
+; set an AM/PM indicator?
+zerotoeleven:			; now always 0..11
+	jnz	nottwelve
+	mov	a, #12		; 0 is changed to 12
+nottwelve:
+	movp3 	a, @a		; convert from binary to bcd
+	mov 	r7, a		; save converted bcd digits
+	anl 	a, #0xf		; get units
+	add 	a, #dfont-page3	; index into font table
+	movp3 	a, @a		; grab font for this digit
+	mov 	@r1, a		; save it
+	inc	r1
+	mov 	a, r7		; restore bcd digits
+	swap 	a
+	anl 	a, #0xf
+	jnz	ge10		; 10H >= 1
+	mov	a, #10		; if zero blank by using tenth entry
+ge10:
+	add 	a, #dfont-page3	; index into font table
+	movp3 	a, @a		; grab font for this digit
+	mov 	@r1, a		; save it
+	ret
+.endif	; twelvehour
+
 .ifdef	muxdisp
 ; convert digit number 0-3 to for port 2 high nybble
 digit2mask:
@@ -1294,6 +1336,9 @@ ident:
 .ifdef	srdisp
 	.asciz	"srdisp"
 .endif	; srdisp
+.ifdef	twelvehour
+	.asciz	"12 hour"
+.endif	; twelvehour
 .endif	; .__.CPU.
 
 ; end
