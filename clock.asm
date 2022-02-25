@@ -288,14 +288,18 @@ colonhere:
 	cpl	a
 .endif	; highison
 	mov	r4, a		; save colon
+.if	debug == 1
 	in	a, p2		; get p2 state
 	anl	a, #0x0f	; low nybble
 	orl	a, #0xf0
 	mov	r5, a		; save
+.endif	; debug
 	mov	a, r6		; retrieve digit index
 	add	a, #digit2mask-page3
 	movp3	a, @a
+.if	debug == 1
 	anl	a, r5		; preserve low nybble
+.endif	; debug
 	outl	p2, a
 	mov	a, r6		; retrieve digit index
 	add	a, #scanbase	; index into the 7 segment storage
