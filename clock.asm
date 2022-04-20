@@ -252,7 +252,12 @@
 	mov	t, a
 	strt	t
 .ifdef	muxdisp
-	anl	p1, #0x00	; turn off all segments
+.if	highison == 1
+	mov	a, #0x00
+.else
+	mov	a, #0xff
+.endif	; highison
+	outl	p1, a		; turn off all segments
 ; work out if we need to turn on colon
 	mov	r0, #hzcounter
 	mov	a, @r0
@@ -596,10 +601,11 @@ workloop:
 	add	a, @r0
 	jb7	leaveon
 .if	highison == 1
-	anl	p1, #0x00
+	mov	a, #0x00
 .else
-	orl	p1, #0xff
+	mov	a, #0xff
 .endif	; highison
+	outl	p1, a
 leaveon:
 .endif	; brightcontrol
 .endif	; muxdisp
