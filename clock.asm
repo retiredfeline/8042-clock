@@ -181,9 +181,9 @@
 .equ	crgc,		12+clockoff
 .equ	crgd,		13+clockoff
 
-.equ	oscon,		0x20	; turn oscillator on
-.equ	disrtc,		0x86	; disable RTC, binary, 24H
-.equ	enrtc,		0x06	; enable RTC, binary, 24H
+.equ	oscon,		0x2b	; turn oscillator on, 32 Hz SQW
+.equ	disrtc,		0x8e	; disable RTC, SQW, binary, 24H
+.equ	enrtc,		0x0e	; enable RTC, SQW, binary, 24H
 .equ	uipbit,		0x80	; update in progress
 
 ; even with RTC, these are used to implement the seconds blink so should be
