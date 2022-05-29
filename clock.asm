@@ -733,6 +733,9 @@ noover:
 .endif	; rtc
 	ret
 
+	.org	0x200
+
+page2:
 ; convert binary values to segment patterns
 updatedisplay:
 .ifdef	rtc
@@ -794,9 +797,6 @@ rtcready:
 	jmp	updatesrdisp
 .endif	; srdisp
 
-	.org	0x200
-
-page2:
 ;
 ; TM1637 handling routines translated from C code at
 ; https://blog.3d-logic.com/2015/01/21/arduino-and-the-tm1637-4-digit-seven-segment-display/
