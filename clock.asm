@@ -24,6 +24,10 @@
 ;.equ	mains,		1	; mains
 ;.equ	rtc,		1	; DS1287 RTC
 
+; UI style, define only one
+.equ	hmui,		1	; increment H and M buttons
+;.equ	modeui,		1	; mode button and increment button
+
 ; display, define only one
 ;.equ	muxdisp,	1	; multiplex display
 .equ	tm1637,		1	; external TM1637 display
@@ -157,8 +161,15 @@
 .equ	swstate,	0x28	; previous state of switches
 .equ	swtent,		0x29	; tentative state of switches
 .equ	swmin,		0x2a	; count of how long state has been stable
+.equ	uimode,		0x2b	; mode ui is in
+.equ	mode0,		0x00	; normal mode
+.equ	mode1,		0x01	; set hours
+.equ	mode2,		0x02	; set minutes
+				; and more later
+.equ	modeend,	0x03
 .equ	mrepeat,	0x2c	; repeat counter for minutes up
 .equ	hrepeat,	0x2d	; repeat counter for hours up
+.equ	b2repeat,	0x2d	; also for button2 repeat
 .equ	brightthresh,	0x2e	; store point at which display turns off
 
 ; saved PSW for checking previous F0
@@ -356,11 +367,11 @@ swnochange:
 	ret
 swaction:
 .if	brightcontrol == 1
-	call	incbright
+	call	button1and2
 	jc	swactioned	; both buttons were down, just brightness
 .endif	; brightcontrol
-	call	incmin
-	call	inchour
+	call	button1
+	call	button2
 swactioned:
 .ifdef	mains
 	mov	r0, #powerfail	; button was clicked
@@ -381,7 +392,8 @@ waitforrtc:
 	ret
 .endif	; rtc
 
-incmin:
+.ifdef	hmui
+button1:
 .ifdef	rtc
 	call	waitforrtc
 .endif	; rtc
@@ -433,8 +445,33 @@ noincmin:
 	mov	r0, #mrepeat
 	mov	@r0, #rptthresh
 	ret
+.endif	; hmui
 
-inchour:
+.ifdef	modeui
+button1:
+	mov	r0, #swtent
+	mov	a, @r0
+	jb2	noincmode	; first time through?
+	mov	r0, #swstate
+	mov	a, @r0
+	jb2	inc1mode
+noincmode:
+	ret
+inc1mode:
+	mov	r0, #uimode
+	mov	a, @r0
+	inc	a
+	mov	@r0, a
+	add 	a, #-modeend	; test for mode wraparound
+	jnc 	modedone
+	mov	@r0, #mode0	; yep overflow, reset to mode0
+modedone:
+	call	updatedisplay
+	ret
+.endif	; modeui
+
+.ifdef	hmui
+button2:
 .ifdef	rtc
 	call	waitforrtc
 .endif	;rtc
@@ -479,6 +516,84 @@ noinchour:
 	mov	r0, #hrepeat
 	mov	@r0, #rptthresh
 	ret
+.endif	; hmui
+
+.ifdef	modeui
+button2:
+.ifdef	rtc
+	call	waitforrtc
+.endif	;rtc
+	mov	r0, #uimode
+	mov	a, @r0
+	jz	noinc
+	xrl	a, #mode1
+	jnz	notmode1
+	mov	r2, #hr		; increment hours
+	mov	r3, #232
+	jmp	doinc
+notmode1:
+	mov	a, @r0
+	xrl	a, #mode2
+	jnz	noinc
+	mov	r2, #mr		; increment minutes
+	mov	r3, #196
+doinc:
+	mov	r0, #swtent
+	mov	a, @r0
+	jb3	noincctr	; first time through?
+	mov	r0, #swstate
+	mov	a, @r0
+	jb3	inc1ctr
+	mov	r0, #b2repeat
+	mov	a, @r0
+	jz	ctrwaitover
+	dec	a
+	mov	@r0, a
+noinc:
+	ret
+ctrwaitover:
+	mov	r0, #b2repeat
+	mov	@r0, #rptperiod
+inc1ctr:
+	mov	a, r2
+	mov	r0, a
+.ifdef	rtc
+	movx	a, @r0
+	inc	a
+	movx	@r0, a
+.else
+	mov	a, @r0
+	inc	a
+	mov	@r0, a
+.endif	; rtc
+	add 	a, r3
+	jnc 	ctrdone
+.ifdef	rtc
+	clr	a
+	movx	@r0, a
+.else
+	mov	@r0, #0		; yep overflow, reset to zero and update display
+.endif	; rtc
+ctrdone:
+	mov	r0, #uimode
+	mov	a, @r0
+	xrl	a, #mode2
+	jnz	nozero
+	mov	r0, #sr		; zero seconds
+.ifdef	rtc
+	clr	a
+	movx	@r0, a
+.else
+	mov	@r0, #0
+.endif	;rtc
+nozero:
+	call 	updatedisplay
+	ret
+noincctr:
+	mov	r0, #b2repeat
+	mov	@r0, #rptthresh
+	ret
+.endif	; modeui
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -503,6 +618,10 @@ ticktock:
 	mov	@r0, #rptthresh
 	mov	r0, #hrepeat
 	mov	@r0, #rptthresh
+.ifdef	modeui
+	mov	r0, #uimode
+	mov	@r0, #mode0
+.endif	; modeui
 .ifdef	rtc
 ; delay 2s to allow RTC to settle
 	mov	r0, #250
@@ -790,6 +909,35 @@ rtcready:
 .ifdef	muxdisp
 	ret
 .endif	;muxdisp
+.ifdef	modeui			; blank digits not being incremented
+	mov	r1, #uimode
+	mov	a, @r1
+	xrl	a, #mode2
+	jnz	showh
+.ifdef	highison
+	clr	a
+.else
+	mov	a, #0xff
+.endif	; highison
+	mov	r0, #sdh1
+	mov	@r0, a
+	mov	r0, #sdh2
+	mov	@r0, a
+showh:
+	mov	a, @r1
+	xrl	a, #mode1
+	jnz	showm
+.ifdef	highison
+	clr	a
+.else
+	mov	a, #0xff
+.endif	; highison
+	mov	r0, #sdm1
+	mov	@r0, a
+	mov	r0, #sdm2
+	mov	@r0, a
+showm:
+.endif	; modeui
 .ifdef	tm1637
 	jmp	updatetm1637
 .endif	; tm1637
@@ -908,8 +1056,18 @@ setbright:
 ;
 updatesrdisp:
 	anl	p2, #data0mask & #clk0mask & #load0mask	; clear to 0
+.ifdef	modeui
+	mov	r0, #uimode
+	mov	a, @r0
+	xrl	a, #mode1
+	jnz	dispm
+	clr	a
+	jmp	nodispm
+dispm:
 	mov	r0, #mr		; minutes are MSB in SR
 	mov	a, @r0
+nodispm:
+.endif	; modeui
 .ifdef	srbcd
 	movp3	a, @a
 .endif	; srbcd
@@ -918,8 +1076,18 @@ updatesrdisp:
 	movp3	a, @a
 .endif	; srtcd
 	call	srbyte
+.ifdef	modeui
+	mov	r0, #uimode
+	mov	a, @r0
+	xrl	a, #mode2
+	jnz	disph
+	clr	a
+	jmp	nodisph
+disph:
 	mov	r0, #hr
 	mov	a, @r0
+nodisph:
+.endif	; modeui
 .ifdef	srbcd
 	movp3	a, @a
 .endif	; srbcd
@@ -959,7 +1127,7 @@ srbit2:				; pulse clock
 .endif	; srdisp
 
 .if	brightcontrol == 1
-incbright:
+button1and2:
 	clr	c
 	mov	r0, #swtent
 	mov	a, @r0
@@ -1349,6 +1517,12 @@ ident:
 .ifdef	twelvehour
 	.asciz	"12 hour"
 .endif	; twelvehour
+.ifdef	hmui
+	.asciz	"hmui"
+.endif	; hmui
+.ifdef	modeui
+	.asciz	"modeui"
+.endif	; modeui
 .endif	; .__.CPU.
 
 ; end
