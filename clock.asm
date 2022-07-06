@@ -88,6 +88,9 @@
 .equ	p23,		0x08
 .equ	p23rmask,	~p23
 .equ	swmask,		p23|p22
+; swap the next assignments to swap buttons
+.equ	t0rmask,	p22rmask
+.equ	t1rmask,	p23rmask
 
 .ifdef	tm1637
 ;
@@ -342,10 +345,10 @@ switch:
 .else
 	mov	a, #0xff
 	jt0	not0
-	anl	a, #p22rmask
+	anl	a, #t0rmask
 not0:
 	jt1	not1
-	anl	a, #p23rmask
+	anl	a, #t1rmask
 not1:
 .endif	; debug
 	anl	a, #swmask	; isolate switch bits
