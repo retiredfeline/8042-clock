@@ -130,8 +130,9 @@
 .equ	blink1mask,	0x10	; p2.4
 .equ	blink0mask,	~blink1mask
 .equ	highison,	0
-; zero or one of the two options should be chosen
+; zero or one of the three options should be chosen
 ;.equ	srbcd,		1	; if set, display BCD instead of binary
+;.equ	srter,		1	; if set, display ternary instead of binary
 ;.equ	srtcd,		1	; if set, display TCD instead of binary
 .equ	brightcontrol,	0	; no brightness control
 .endif	; srdisp
@@ -1074,6 +1075,10 @@ nodispm:
 .ifdef	srbcd
 	movp3	a, @a
 .endif	; srbcd
+.ifdef	srter
+	add	a, #tertab-page3
+	movp3	a, @a
+.endif	; srter
 .ifdef	srtcd
 	add	a, #tcdtab-page3
 	movp3	a, @a
@@ -1094,6 +1099,10 @@ nodisph:
 .ifdef	srbcd
 	movp3	a, @a
 .endif	; srbcd
+.ifdef	srter
+	add	a, #tertab-page3
+	movp3	a, @a
+.endif	; srter
 .ifdef	srtcd
 	add	a, #tcdtab-page3
 	movp3	a, @a
@@ -1276,6 +1285,70 @@ page3:
 	.db	0x58
 	.db	0x59
 	.db	0x60	; for leap seconds
+
+.ifdef	srter
+tertab:
+	.db	0x00
+	.db	0x01
+	.db	0x02
+	.db	0x04
+	.db	0x05
+	.db	0x06
+	.db	0x08
+	.db	0x09
+	.db	0x0a
+	.db	0x10
+	.db	0x11
+	.db	0x12
+	.db	0x14
+	.db	0x15
+	.db	0x16
+	.db	0x18
+	.db	0x19
+	.db	0x1a
+	.db	0x20
+	.db	0x21
+	.db	0x22
+	.db	0x24
+	.db	0x25
+	.db	0x26
+	.db	0x28
+	.db	0x29
+	.db	0x2a
+	.db	0x40
+	.db	0x41
+	.db	0x42
+	.db	0x44
+	.db	0x45
+	.db	0x46
+	.db	0x48
+	.db	0x49
+	.db	0x4a
+	.db	0x50
+	.db	0x51
+	.db	0x52
+	.db	0x54
+	.db	0x55
+	.db	0x56
+	.db	0x58
+	.db	0x59
+	.db	0x5a
+	.db	0x60
+	.db	0x61
+	.db	0x62
+	.db	0x64
+	.db	0x65
+	.db	0x66
+	.db	0x68
+	.db	0x69
+	.db	0x6a
+	.db	0x80
+	.db	0x81
+	.db	0x82
+	.db	0x84
+	.db	0x85
+	.db	0x86
+.endif	; srter
 
 .ifdef	srtcd
 tcdtab:
