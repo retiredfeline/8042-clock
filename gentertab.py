@@ -9,7 +9,7 @@ def toternary(i):
     result = 0
     for shift in range(0, 4):
         rem = i % 3
-        i = i // 3
+        i //= 3
         result |= (MASKS[rem] << (shift * 2))
     return result
 
