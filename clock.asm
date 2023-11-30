@@ -640,10 +640,6 @@ done8ms:
 	stop	tcnt
 	djnz	r0, another8ms
 ; don't preset RTC each power up, just setup RTC access, correct invalid values
-; and enable oscillator
-	mov	r0, #crga
-	mov	a, #oscon
-	movx	@r0, a
 ; pause internal functions
 	mov	r0, #crgb
 	mov	a, #disrtc
@@ -679,6 +675,10 @@ hourvalid:
 ; reenable internal functions
 	mov	r0, #crgb
 	mov	a, #enrtc
+	movx	@r0, a
+; and enable oscillator
+	mov	r0, #crga
+	mov	a, #oscon
 	movx	@r0, a
 .else
 ; set 12:34:56 as initial data
