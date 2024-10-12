@@ -129,6 +129,7 @@
 .equ	blink1mask,	0x10	; p2.4
 .equ	blink0mask,	~blink1mask
 .equ	highison,	1
+;.equ	msdfirst	1	; shift most significant digit first
 .endif	; hc595
 
 .ifdef	srdisp
@@ -1076,8 +1077,22 @@ setbright:
 .endif	; tm1637
 
 .ifdef	hc595
-updatehc595:			; LSD first
+updatehc595:
 	anl	p2, #data0mask & #clk0mask & #load0mask	; clear to 0
+.ifdef	msdfirst	; shift MSD first
+	mov	r0, #sdh2
+	mov	a, @r0
+	call	srbyte
+	mov	r0, #sdh1
+	mov	a, @r0
+	call	srbyte
+	mov	r0, #sdm2
+	mov	a, @r0
+	call	srbyte
+	mov	r0, #sdm1
+	mov	a, @r0
+	call	srbyte
+.else			; shift LSD first
 	mov	r0, #sdm1
 	mov	a, @r0
 	call	srbyte
@@ -1090,6 +1105,7 @@ updatehc595:			; LSD first
 	mov	r0, #sdh2
 	mov	a, @r0
 	call	srbyte
+.endif
 	orl	p2, #load1mask	; pulse load
 	nop
 	anl	p2, #load0mask
