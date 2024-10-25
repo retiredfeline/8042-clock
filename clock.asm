@@ -25,8 +25,8 @@
 ;.equ	rtc,		1	; DS1287 RTC
 
 ; UI style, define only one
-.equ	hmui,		1	; increment H and M buttons
-;.equ	modeui,		1	; mode button and increment button
+;.equ	hmui,		1	; increment H and M buttons
+.equ	modeui,		1	; mode button and increment button
 
 ; display, define only one
 ;.equ	muxdisp,	1	; multiplex display
