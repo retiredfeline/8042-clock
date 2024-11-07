@@ -188,6 +188,8 @@
 				; and more later
 .equ	modeend,	0x03
 .equ	mrepeat,	0x2c	; repeat counter for minutes up
+.equ	modetimeout,	0x2c	; doubles as mode timeout counter, comment out to disable
+.equ	timeoutsecs,	64	; seconds before reverting to normal mode
 .equ	hrepeat,	0x2d	; repeat counter for hours up
 .equ	b2repeat,	0x2d	; also for button2 repeat
 .equ	brightthresh,	0x2e	; store point at which display turns off
@@ -487,7 +489,11 @@ inc1mode:
 	mov	@r0, #mode0	; yep overflow, reset to mode0
 modedone:
 	call	updatedisplay
+.ifdef	modetimeout
+	jmp	checktimeout
+.else
 	ret
+.endif	; modetimeout
 .endif	; modeui
 
 .ifdef	hmui
@@ -608,6 +614,19 @@ ctrdone:
 .endif	;rtc
 nozero:
 	call 	updatedisplay
+.ifdef	modetimeout
+checktimeout:
+	mov	r0, #uimode
+	mov	a, @r0
+	xrl	a, #mode0
+	mov	r0, #modetimeout
+	jnz	restarttimeout
+	mov	@r0, #0
+	jmp	timeoutset
+restarttimeout:
+	mov	@r0, #timeoutsecs
+timeoutset:
+.endif	; modetimeout
 	ret
 noincctr:
 	mov	r0, #b2repeat
@@ -634,10 +653,17 @@ ticktock:
 	mov	@r0, a
 	mov	r0, #swmin	; preset switch depression counts
 	mov	@r0, #depmin
+.ifdef	modetimeout
+	mov	r0, #modetimeout
+	mov	@r0, #0
+	mov	r0, #b2repeat
+	mov	@r0, #rptthresh
+.else
 	mov	r0, #mrepeat	; and repeat thresholds
 	mov	@r0, #rptthresh
 	mov	r0, #hrepeat
 	mov	@r0, #rptthresh
+.endif	; modetimeout
 .ifdef	modeui
 	mov	r0, #uimode
 	mov	@r0, #mode0
@@ -889,6 +915,18 @@ incsec:
 	mov	@r0, #0		; reset hours to 0
 noover:
 .endif	; rtc
+.ifdef	modetimeout
+	mov	r0, #modetimeout
+	mov	a, @r0
+	jnz	dectimeout
+	mov	r0, #uimode
+	mov	@r0, #mode0
+	jmp	timeoutdone
+dectimeout:
+	dec	a
+	mov	@r0, a
+timeoutdone:
+.endif	; modetimeout
 	ret
 
 	.org	0x200
