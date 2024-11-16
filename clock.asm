@@ -22,7 +22,16 @@
 ; timing source, define only one
 .equ	intxtal,	1	; MCU clock
 ;.equ	mains,		1	; mains
-;.equ	rtc,		1	; DS1287 RTC
+;.equ	rtcsqw,		1	; for mains, use DS1287 RTC SQW output only as "mains"
+;.equ	rtc,		1	; use DS1287 RTC to keep time
+
+.ifdef	rtc
+.equ	ds1287used,	1
+.endif	; rtc
+
+.ifdef	rtcsqw
+.equ	ds1287used,	1
+.endif	; rtcsqw
 
 ; UI style, define only one
 ;.equ	hmui,		1	; increment H and M buttons
@@ -42,6 +51,9 @@
 
 ; 0 = 0 bit turns on, 1 = 1 bit turns on segment
 .equ	highison,	0
+
+; for muxdisp, 0 = 0 bit turns on, 1 = 1 bit turns on digit
+.equ	highdigiton,	0
 
 ; if defined, display is 12 hour
 ;.equ	twelvehour,	1
@@ -197,22 +209,30 @@
 ; saved PSW for checking previous F0
 .equ	savepsw,	0x2f
 
+.ifdef	ds1287used
 .ifdef	rtc
-.equ	clockoff,	0	; RTC is addressed as external RAM
-.else
-.equ	clockoff,	0x30	; put clock values at top of internal RAM
+.equ	ctroff,		0	; RTC is addressed as external RAM
+.equ	ctloff,	0
 .endif	; rtc
+.ifdef	rtcsqw
+.equ	ctroff,		0x30	; put clock values at top of internal RAM
+.equ	ctloff,		0	; but RTC is addressed as external RAM
+.endif	; rtcsqw
+.else
+.equ	ctroff,		0x30	; put clock values at top of internal RAM
+.equ	ctloff,		0x30
+.endif	; ds1287used
 
-.equ	sr,		0+clockoff
-.equ	sra,		1+clockoff
-.equ	mr,		2+clockoff
-.equ	mra,		3+clockoff
-.equ	hr,		4+clockoff
-.equ	hra,		5+clockoff
-.equ	crga,		10+clockoff
-.equ	crgb,		11+clockoff
-.equ	crgc,		12+clockoff
-.equ	crgd,		13+clockoff
+.equ	sr,		0+ctroff
+.equ	sra,		1+ctroff
+.equ	mr,		2+ctroff
+.equ	mra,		3+ctroff
+.equ	hr,		4+ctroff
+.equ	hra,		5+ctroff
+.equ	crga,		10+ctloff
+.equ	crgb,		11+ctloff
+.equ	crgc,		12+ctloff
+.equ	crgd,		13+ctloff
 
 .equ	oscon,		0x2b	; turn oscillator on, 32 Hz SQW
 .equ	disrtc,		0x8e	; disable RTC, SQW, binary, 24H
@@ -230,7 +250,11 @@
 .equ	counthz,	2	; speed up simulation
 .else
 .ifdef	mains
+.ifdef	rtcsqw
+.equ	counthz,	32	; RTC SQW frequency
+.else
 .equ	counthz,	50	; mains frequency
+.endif	; rtcsqw
 .else
 .equ	counthz,	64	; virtual mains frequency, must suit scanfreq
 .endif	; mains
@@ -460,7 +484,7 @@ mindone:
 	movx	@r0, a
 .else
 	mov	@r0, #0
-.endif	;rtc
+.endif	; rtc
 	call 	updatedisplay
 	ret
 noincmin:
@@ -500,7 +524,7 @@ modedone:
 button2:
 .ifdef	rtc
 	call	waitforrtc
-.endif	;rtc
+.endif	; rtc
 	mov	r0, #swtent
 	mov	a, @r0
 	jb3	noinchour	; first time through?
@@ -548,7 +572,7 @@ noinchour:
 button2:
 .ifdef	rtc
 	call	waitforrtc
-.endif	;rtc
+.endif	; rtc
 	mov	r0, #uimode
 	mov	a, @r0
 	jz	noinc
@@ -611,7 +635,7 @@ ctrdone:
 	movx	@r0, a
 .else
 	mov	@r0, #0
-.endif	;rtc
+.endif	; rtc
 nozero:
 	call 	updatedisplay
 .ifdef	modetimeout
@@ -668,7 +692,7 @@ ticktock:
 	mov	r0, #uimode
 	mov	@r0, #mode0
 .endif	; modeui
-.ifdef	rtc
+.ifdef	ds1287used
 ; delay 2s to allow RTC to settle
 	mov	r0, #250
 another8ms:
@@ -694,6 +718,16 @@ done8ms:
 	movx	@r0, a
 	mov	r0, #hra
 	movx	@r0, a
+.ifdef	rtcsqw
+; counters in RAM, not RTC
+; set 12:34:56 as initial data
+	mov	r0, #sr
+	mov	@r0, #56
+	mov	r0, #mr
+	mov	@r0, #34
+	mov	r0, #hr
+	mov	@r0, #12
+.else
 ; correct invalid register values
 	mov	r0, #mr
 	movx	a, @r0
@@ -714,13 +748,14 @@ minvalid:
 	clr	a
 	movx	@r0, a
 hourvalid:
+.endif	; rtcsqw
+; enable oscillator
+	mov	r0, #crga
+	mov	a, #oscon
+	movx	@r0, a
 ; reenable internal functions
 	mov	r0, #crgb
 	mov	a, #enrtc
-	movx	@r0, a
-; and enable oscillator
-	mov	r0, #crga
-	mov	a, #oscon
 	movx	@r0, a
 .else
 ; set 12:34:56 as initial data
@@ -730,7 +765,7 @@ hourvalid:
 	mov	@r0, #34
 	mov	r0, #hr
 	mov	@r0, #12
-.endif	; rtc
+.endif	; ds1287used
 .if	brightcontrol == 1
 	mov	r0, #currbright
 	mov	a, #defbright
@@ -985,7 +1020,7 @@ rtcready:
 .endif	; twelvehour
 .ifdef	muxdisp
 	ret
-.endif	;muxdisp
+.endif	; muxdisp
 .ifdef	modeui			; blank digits not being incremented
 	mov	r1, #uimode
 	mov	a, @r1
@@ -1685,6 +1720,16 @@ ge10:
 .ifdef	muxdisp
 ; convert digit number 0-3 to for port 2 high nybble
 digit2mask:
+.if	highdigiton == 1
+	.db	0x10		; p2.4 is min
+	.db	0x20		; p2.5 is 10 min
+	.db	0x40		; p2.6 is hour
+	.db	0x80		; p2.7 is 10 hour
+	.db	0x00		; just in case scancnt == 6 in future
+	.db	0x00
+	.db	0x00
+	.db	0x00
+.else
 	.db	~0x10		; p2.4 is min
 	.db	~0x20		; p2.5 is 10 min
 	.db	~0x40		; p2.6 is hour
@@ -1693,6 +1738,7 @@ digit2mask:
 	.db	~0x00
 	.db	~0x00
 	.db	~0x00
+.endif	; highdigiton
 .endif	; muxdisp
 
 ident:
@@ -1702,7 +1748,7 @@ ident:
 	.db	0x59, 0x61, 0x70
 	.db	0x20
 	.db	0x32, 0x30	; 20
-	.db	0x32, 0x31	; 21
+	.db	0x32, 0x34	; 24
 	.db	0x0
 
 .ifdef	.__.CPU.		; if we are using as8048 this is defined
@@ -1713,9 +1759,12 @@ ident:
 .ifdef	mains
 	.asciz	"mains"
 .endif	; mains
+.ifdef	rtcsqw
+	.asciz	"rtcsqw"
+.endif	; rtcsqw
 .ifdef	rtc
 	.asciz	"rtc"
-.endif	;rtc
+.endif	; rtc
 .ifdef	muxdisp
 	.asciz	"muxdisp"
 .endif	; muxdisp
@@ -1734,9 +1783,6 @@ ident:
 .ifdef	hmui
 	.asciz	"hmui"
 .endif	; hmui
-.ifdef	modeui
-	.asciz	"modeui"
-.endif	; modeui
 .endif	; .__.CPU.
 
 ; end
