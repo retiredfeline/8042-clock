@@ -92,8 +92,8 @@
 ; p1.0 thru p1.7 drive segments when driving with edge triggered latch
 ; p2.0 thru p2.3 are used in debug mode in simulator, not physically
 ; p2.4 thru p2.7 drive digits when driving directly. or TM1637
-; t0 set minutes
-; t1 set hours
+; t0 button1
+; t1 button2
 ; both change brightness
 .equ	p21,		0x02
 .equ	p22,		0x04
@@ -378,8 +378,8 @@ colonhere:
 	retr
 
 ; switch handling
-; t0 low is set minutes, hold to start, then hold to repeat
-; t1 low is set hours, hold to start, then hold to repeat
+; t0 low is change mode / set minutes, hold to start, then hold to repeat
+; t1 low is advance counter / set hours, hold to start, then hold to repeat
 ; convert to bitmask to easily detect change
 ; use p2.2 and p2.3 to emulate for debugging
 switch:
