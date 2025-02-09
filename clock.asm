@@ -81,7 +81,8 @@
 .equ	scanfreq,	256	; resulting scan frequency, see above
 
 ; these are in 1/100ths of second, multiply by scanfreq to get counts
-.equ	depmin,		scanfreq*10/100	; down 1/10th s to register
+.equ	depmin,		scanfreq*5/100	; down 1/20th s to register
+.equ	relmin,		scanfreq*10/100	; down 1/10th s to register
 .equ	rptthresh,	scanfreq*50/100	; repeat kicks in at 1/2 s
 .equ	rptperiod,	scanfreq*25/100	; repeat 4 times / second
 
@@ -130,6 +131,9 @@
 .endif	; tm1637
 
 .ifdef	hc595
+;
+; for driving segment displays with 74HC595
+;
 .equ	data1mask,	0x80	; p2.7
 .equ	data0mask,	~data1mask&0xff
 .equ	clk1mask,	0x40	; p2.6
@@ -137,16 +141,15 @@
 .equ	load1mask,	0x20	; p2.5
 .equ	load0mask,	~load1mask&0xff
 .equ	colon1mask,	0x80	; colon is top bit
-.equ	blinkp24,	1
-.equ	blink1mask,	0x10	; p2.4
-.equ	blink0mask,	~blink1mask
+.equ	pwm1mask,	0x10	; p2.4
+.equ	pwm0mask,	~pwm1mask&0xff
 .equ	highison,	1
 ;.equ	msdfirst	1	; shift most significant digit first
 .endif	; hc595
 
 .ifdef	srdisp
 ;
-; for driving 74HC595 raw display
+; for driving raw display with 74HC595
 ;
 .equ	data1mask,	0x80	; p2.7
 .equ	data0mask,	~data1mask&0xff
@@ -400,7 +403,16 @@ not1:
 	xrl	a, @r0		; compare against last state
 	mov	r0, #swmin
 	jz	swnochange
-	mov	@r0, #depmin	; reload timer
+	mov	r1, #swstate	; check current state
+	mov	a, @r1
+	xrl	a, #swmask	; were switches up before?
+	mov	r1, #swmin
+	jz	isdep		; depress or release
+	mov	@r1, #relmin	; was release
+	jmp	savestate
+isdep:
+	mov	@r1, #depmin	; was depress
+savestate:
 	mov	r0, #swtent
 	mov	a, r7
 	mov	@r0, a		; save current switch state
@@ -693,6 +705,7 @@ ticktock:
 	mov	@r0, #mode0
 .endif	; modeui
 .ifdef	ds1287used
+.ifdef	rtc
 ; delay 2s to allow RTC to settle
 	mov	r0, #250
 another8ms:
@@ -705,6 +718,7 @@ busy8ms:
 done8ms:
 	stop	tcnt
 	djnz	r0, another8ms
+.endif	; rtc
 ; don't preset RTC each power up, just setup RTC access, correct invalid values
 ; pause internal functions
 	mov	r0, #crgb
@@ -794,6 +808,7 @@ hourvalid:
 ; main loop
 workloop:
 	jtf	ticked
+
 .ifdef	muxdisp
 .if	brightcontrol == 1	; PWM method
 	mov	r0, #brightthresh
@@ -809,27 +824,40 @@ workloop:
 leaveon:
 .endif	; brightcontrol
 .endif	; muxdisp
+
+.ifdef	hc595
+.if	brightcontrol == 1	; PWM method
+	mov	r0, #brightthresh
+	mov	a, t
+	add	a, @r0
+	jb7	leaveon
+	orl	p2, #pwm1mask	; take high to turn off
+	jmp	pwmdone
+leaveon:
+	anl	p2, #pwm0mask	; take low to turn on
+pwmdone:
+.endif	; brightcontrol
+.endif	; hc595
+
 	jmp	workloop	; wait until tick is up
 ticked:
 	call	tickhandler
 	jnc	noadv
 	call	incsec
 	call	updatedisplay
+
 .ifdef	tm1637
 .if	blinkp25 == 1
 	orl	p2, #blink1mask	; turn off blink
 .endif	; blinkp25
 .endif	; tm1637
-.ifdef	hc595
-.if	blinkp24 == 1
-	orl	p2, #blink1mask	; turn off blink
-.endif	; blinkp24
-.endif	; hc595
+
 .ifdef	srdisp
 .if	blinkp24 == 1
 	orl	p2, #blink1mask	; turn off blink
 .endif	; blinkp24
 .endif	; srdisp
+
 noadv:
 	call	switch
 	jmp	workloop
@@ -859,6 +887,7 @@ tickhandler:			; handle blink first
 	anl	p2, #blink0mask	; pull low to turn on
 .endif	; blinkp25
 .endif	; tm1637
+
 .ifdef	hc595
 	mov	r0, #hzcounter
 	mov	a, @r0
@@ -869,10 +898,8 @@ tickhandler:			; handle blink first
 	orl	a, #colon1mask
 	mov	@r0, a		; modify digit register but will only last 1/2 s
 	call	updatehc595
-.if	blinkp24 == 1
-	anl	p2, #blink0mask	; pull low to turn on
-.endif	; blinkp24
 .endif	; hc595
+
 .ifdef	srdisp
 .if	blinkp24 == 1
 	mov	r0, #hzcounter
@@ -1182,7 +1209,17 @@ updatehc595:
 	orl	p2, #load1mask	; pulse load
 	nop
 	anl	p2, #load0mask
-setbright:	; nop to satisfy reference
+	ret
+
+setbright:
+.if	brightcontrol == 1
+	mov	r0, #currbright
+	mov	a, @r0
+	add	a, #brighttable-page2
+	movp	a, @a
+	mov	r0, #brightthresh
+	mov	@r0, a
+.endif	; brightcontrol
 	ret
 
 ;
@@ -1336,8 +1373,7 @@ nosingle:			; don't trigger any single actions
 noincbright:
 	ret
 
-.ifdef	muxdisp
-brighttable:			; only for direct drive
+brighttable:
 	.db	timerdiv-timerdiv/16
 	.db	timerdiv-(timerdiv*2)/16
 	.db	timerdiv-(timerdiv*4)/16
@@ -1346,8 +1382,6 @@ brighttable:			; only for direct drive
 	.db	timerdiv-(timerdiv*13)/16
 	.db	timerdiv-(timerdiv*14)/16
 	.db	timerdiv-timerdiv
-.endif	; muxdisp
-
 .endif	; brightcontrol
 
 .if	blinktest == 1

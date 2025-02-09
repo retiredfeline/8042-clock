@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2018-2024 Ken Yap
+Copyright (c) 2018-2025 Ken Yap
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
