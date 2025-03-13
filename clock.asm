@@ -1229,11 +1229,7 @@ srbyte:
 	mov	r0, #8
 srbit:
 	rlc	a
-.if	highison == 1
 	jc	srbit1
-.else
-	jnc	srbit1
-.endif	; highison
 	anl	p2, #data0mask
 	jmp	srbit2
 srbit1:
