@@ -895,7 +895,11 @@ tickhandler:			; handle blink first
 	jnz	blinkoff
 	mov	r0, #sdm1+colonplace
 	mov	a, @r0
+.if	highison == 1
 	orl	a, #colon1mask
+.else
+	anl	a, #~colon1mask
+.endif	; highison
 	mov	@r0, a		; modify digit register but will only last 1/2 s
 	call	updatehc595
 .endif	; hc595
