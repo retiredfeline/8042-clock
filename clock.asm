@@ -816,7 +816,7 @@ workloop:
 	add	a, @r0
 	jb7	leaveon
 .if	highison == 1
-	mov	a, #0x00
+	clr	a
 .else
 	mov	a, #0xff
 .endif	; highison
@@ -1053,7 +1053,7 @@ rtcready:
 	mov	a, @r1
 	xrl	a, #mode2
 	jnz	showh
-.ifdef	highison
+.if	highison == 1
 	clr	a
 .else
 	mov	a, #0xff
@@ -1066,7 +1066,7 @@ showh:
 	mov	a, @r1
 	xrl	a, #mode1
 	jnz	showm
-.ifdef	highison
+.if	highison == 1
 	clr	a
 .else
 	mov	a, #0xff
