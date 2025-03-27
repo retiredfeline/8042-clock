@@ -44,7 +44,7 @@
 ;.equ	srdisp,		1	; 74HC595 16 LED display
 
 ; 0 = no brightness control, 1 = both buttons = cycle brightness
-.equ	brightcontrol,	1
+.equ	brightcontrol,	0
 
 ; 0 = 7 segment, 1 = 6 segment
 .equ	sixseg,		0
@@ -120,6 +120,7 @@
 .equ	blinkp25,	1
 .equ	blink1mask,	0x20	; p2.5
 .equ	blink0mask,	~blink1mask
+.equ	brightcontrol,	1	; turn on brightness control
 .equ	highison,	1
 .equ	minbright,	0x88	; 1/16th brightness
 .equ	maxbright,	0x8f	; 14/16 brightness (why not full?)
@@ -165,7 +166,6 @@
 ;.equ	srbcd,		1	; if set, display BCD instead of binary
 ;.equ	srter,		1	; if set, display ternary instead of binary
 ;.equ	srtcd,		1	; if set, display TCD instead of binary
-.equ	brightcontrol,	0	; no brightness control
 .endif	; srdisp
 
 ; scan digit storage (6 digits)
@@ -1049,9 +1049,6 @@ rtcready:
 .else
 	call	byte2segment
 .endif	; twelvehour
-.ifdef	muxdisp
-	ret
-.endif	; muxdisp
 .ifdef	modeui			; blank digits not being incremented
 	mov	r1, #uimode
 	mov	a, @r1
@@ -1081,6 +1078,9 @@ showh:
 	mov	@r0, a
 showm:
 .endif	; modeui
+.ifdef	muxdisp
+	ret
+.endif	; muxdisp
 .ifdef	tm1637
 	jmp	updatetm1637
 .endif	; tm1637
