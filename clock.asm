@@ -39,6 +39,7 @@
 
 ; display, define only one
 ;.equ	muxdisp,	1	; multiplex display
+;.equ	beckman,	1	; Beckman display, g least significant bit, digits reversed
 .equ	tm1637,		1	; external TM1637 display
 ;.equ	hc595,		1	; 74HC595 7 segment display
 ;.equ	srdisp,		1	; 74HC595 16 LED display
@@ -75,6 +76,7 @@
 ;.equ	timerdiv,	44	; 240 Hz with 5.0688 MHz crystal
 .equ	timerdiv,	40	; 256 Hz with 4.9152 MHz crystal
 ;.equ	timerdiv,	32	; 240 Hz with 3.6864 MHz crystal
+;.equ	timerdiv,	31	; 240 Hz with 3.595295 MHz crystal
 .endif	; debug
 .equ	tcount,		-timerdiv
 
@@ -1663,6 +1665,24 @@ dfont:
 .endif	; highison
 .else
 .if	highison == 1
+.ifdef	beckman
+	.db	0x7e	; 0
+	.db	0x30	; 1
+	.db	0x6d
+	.db	0x79
+	.db	0x33
+	.db	0x5b
+	.db	0x5f
+	.db	0x70
+	.db	0x7f
+	.db	0x73
+	.db	0x00
+	.db	0x00
+	.db	0x00
+	.db	0x00
+	.db	0x00
+	.db	0x00
+.else
 	.db	0x3f	; 0
 	.db	0x06	; 1
 	.db	0x5b
@@ -1679,6 +1699,7 @@ dfont:
 	.db	0x00
 	.db	0x00
 	.db	0x00
+.endif	; beckman
 .else
 	.db	~0x3f	; 0
 	.db	~0x06	; 1
@@ -1764,10 +1785,17 @@ digit2mask:
 	.db	0x00
 	.db	0x00
 .else
+.ifdef	beckman
+	.db	~0x80		; p2.7 is 10 hour
+	.db	~0x40		; p2.6 is hour
+	.db	~0x20		; p2.5 is 10 min
+	.db	~0x10		; p2.4 is min
+.else
 	.db	~0x10		; p2.4 is min
 	.db	~0x20		; p2.5 is 10 min
 	.db	~0x40		; p2.6 is hour
 	.db	~0x80		; p2.7 is 10 hour
+.endif	; beckman
 	.db	~0x00		; just in case scancnt == 6 in future
 	.db	~0x00
 	.db	~0x00
